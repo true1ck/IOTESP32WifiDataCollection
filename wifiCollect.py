@@ -1,87 +1,80 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 import os
 import csv
 
 app = Flask(__name__)
 
-# Create a folder to store data if it doesn't exist
+# Create directories for data if they don't exist
 if not os.path.exists('rssi_data'):
     os.makedirs('rssi_data')
 
-# CSV file path
-csv_file = 'rssi_data/rssi_data.csv'
+# Path for CSV file
+csv_file_path = os.path.abspath('rssi_data/rssi_data.csv')  # Use absolute path
+print(f"CSV File Path: {csv_file_path}")
 
-# Column headers for CSV
-columns = ["CSG518-1", "CSG518-2", "CSG518-3", "CSG518-4", "CSG518-5", "CSG518-6", "CSG518-7", "CSG518-8", "output"]
+# Initialize an entry counter
+entry_count = 0
+entry_limit = 5  # Limit to 100 entries
 
-# Initialize CSV file with headers
-if not os.path.exists(csv_file):
-    with open(csv_file, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(columns)
+# In-memory buffer for data
+data_buffer = []
+
+# Ensure CSV file is ready
+if not os.path.exists(csv_file_path):
+    # Create CSV file with headers
+    try:
+        with open(csv_file_path, 'w', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(['Network1', 'RSSI1', 'Network2', 'RSSI2', 'Network3', 'RSSI3',
+                                'Network4', 'RSSI4', 'Network5', 'RSSI5', 'Network6', 'RSSI6',
+                                'Network7', 'RSSI7', 'Network8', 'RSSI8', 'Output'])  # Add column headers
+    except Exception as e:
+        print(f"Error initializing CSV file: {e}")
 
 @app.route('/')
 def index():
-    # Read the CSV file and display its content
-    with open(csv_file, 'r') as f:
-        reader = csv.reader(f)
-        rows = list(reader)
-
-    return render_template('index.html', rows=rows)
+    return "RSSI Data Collection Server is running"
 
 @app.route('/post-rssi', methods=['POST'])
 def post_rssi():
+    global entry_count, data_buffer
+
     try:
-        # Get data from POST request
+        # Get JSON data from POST request
         data = request.get_json()
-        print(f"Received data: {data}")  # Print the received data for debugging
+        print(f"Received data: {data}")  # Debugging output
 
-        # Ensure data contains 'rssi'
-        if not data or 'rssi' not in data:
-            return jsonify({"error": "Invalid data format, missing 'rssi'"}), 400
+        # Validate data (expecting 8 networks with their RSSI values)
+        if not data or len(data) != 8:
+            return jsonify({"error": "Invalid data format, expecting 8 networks with RSSI values"}), 400
 
-        # Extract RSSI values from the JSON data
-        rssi_values = data.get('rssi')
+        # Flatten data into a single row for CSV
+        row = []
+        for network, rssi in data.items():
+            row.extend([network, rssi])
 
-        # Add an 'output' column with a placeholder (empty value)
-        row = rssi_values + [""]
+        # Add the hardcoded output value to the row
+        row.append('g11')
+        data_buffer.append(row)
 
-        # Save the data to a CSV file
-        with open(csv_file, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(row)
+        # Increment entry counter
+        entry_count += 1
 
-        return jsonify({"message": "Data received and stored"}), 200
+        # Write to CSV file immediately for testing
+        with open(csv_file_path, 'a', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(row)  # Write the current row
+            print(f"Row written to CSV: {row}")
+
+        # Stop after 100 entries
+        if entry_count >= entry_limit:
+            print("Data collection limit reached.")
+            return jsonify({"message": "100 entries collected. Stopping data collection."}), 200
+
+        return jsonify({"message": "Data received and stored", "entry_count": entry_count}), 200
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-@app.route('/update-output', methods=['POST'])
-def update_output():
-    try:
-        data = request.get_json()
-
-        # Validate data
-        if 'index' not in data or 'output' not in data:
-            return jsonify({"error": "Invalid data format, missing 'index' or 'output'"}), 400
-
-        index = data['index']
-        output = data['output']
-
-        # Read the existing CSV data
-        with open(csv_file, 'r') as f:
-            rows = list(csv.reader(f))
-
-        # Update the output column for the specified row
-        if 0 < index < len(rows):
-            rows[index][8] = output  # Update the 'output' column (index 8)
-
-        # Write updated data back to CSV
-        with open(csv_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerows(rows)
-
-        return jsonify({"message": "Output updated"}), 200
-    except Exception as e:
+        print(f"Error: {e}")  # Log the error
         return jsonify({"error": str(e)}), 400
 
 if __name__ == '__main__':

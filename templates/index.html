@@ -6,8 +6,7 @@
     <title>RSSI Data</title>
 </head>
 <body>
-    <h1>RSSI Data</h1>
-
+    <h1>RSSI Data Collection</h1>
     <table border="1">
         <thead>
             <tr>
@@ -23,7 +22,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for row in rows %}
+            {% for row in data %}
             <tr>
                 <td>{{ row[0] }}</td>
                 <td>{{ row[1] }}</td>
@@ -33,37 +32,16 @@
                 <td>{{ row[5] }}</td>
                 <td>{{ row[6] }}</td>
                 <td>{{ row[7] }}</td>
-                <td><input type="text" id="output-{{ loop.index0 }}" value="{{ row[8] }}"></td>
+                <td>{{ row[8] }}</td> <!-- Output column -->
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <h2>Update Output</h2>
-    <button onclick="updateOutput()">Submit</button>
-
-    <script>
-        function updateOutput() {
-            const rows = document.querySelectorAll('tbody tr');
-            rows.forEach((row, index) => {
-                const outputValue = document.getElementById(`output-${index}`).value;
-                fetch('/update-output', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        index: index + 1,
-                        output: outputValue
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                })
-                .catch(error => console.error('Error:', error));
-            });
-        }
-    </script>
+    <h2>Update Output (Apply to all rows)</h2>
+    <form action="/update-all-outputs" method="POST">
+        <input type="text" id="output_value" name="output" placeholder="Enter Output value">
+        <button type="submit">Update Output</button>
+    </form>
 </body>
 </html>
