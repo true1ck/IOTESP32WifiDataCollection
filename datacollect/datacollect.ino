@@ -32,8 +32,8 @@ void setup() {
 }
 
 void loop() {
-    // Faster scan with reduced timeout per channel
-    int n = WiFi.scanNetworks(false, false, false, 200);  // 200ms timeout per channel
+    // Use faster scan with reduced timeout per channel
+    int n = WiFi.scanNetworks(false, false, false, 120);  // 120ms timeout per channel
     Serial.println("Scan complete!");
 
     if (n == 0) {
@@ -73,8 +73,8 @@ void loop() {
         }
     }
 
-    // Reduce delay to make scanning faster
-    delay(1000);  // 2-second delay before scanning again
+    // Reduce delay between scans to make data collection faster
+    delay(100);  // Small delay to prevent overloading the system
 }
 
 void sendRSSIToServer(String jsonPayload) {

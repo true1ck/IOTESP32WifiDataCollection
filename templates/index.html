@@ -1,47 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RSSI Data</title>
+    <title>RSSI Data Collection</title>
 </head>
 <body>
     <h1>RSSI Data Collection</h1>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>CSG518-1</th>
-                <th>CSG518-2</th>
-                <th>CSG518-3</th>
-                <th>CSG518-4</th>
-                <th>CSG518-5</th>
-                <th>CSG518-6</th>
-                <th>CSG518-7</th>
-                <th>CSG518-8</th>
-                <th>Output</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in data %}
-            <tr>
-                <td>{{ row[0] }}</td>
-                <td>{{ row[1] }}</td>
-                <td>{{ row[2] }}</td>
-                <td>{{ row[3] }}</td>
-                <td>{{ row[4] }}</td>
-                <td>{{ row[5] }}</td>
-                <td>{{ row[6] }}</td>
-                <td>{{ row[7] }}</td>
-                <td>{{ row[8] }}</td> <!-- Output column -->
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <h2>Update Output (Apply to all rows)</h2>
-    <form action="/update-all-outputs" method="POST">
-        <input type="text" id="output_value" name="output" placeholder="Enter Output value">
-        <button type="submit">Update Output</button>
+    <form action="/set-output" method="POST">
+        <label for="output">Output Value:</label>
+        <input type="text" id="output" name="output" value="{{ current_output }}">
+        <button type="submit">Set Output</button>
     </form>
+    <br>
+    <form action="/toggle-collection" method="POST">
+        {% if data_collection_active %}
+            <button type="submit">Stop Data Collection</button>
+        {% else %}
+            <button type="submit">Start Data Collection</button>
+        {% endif %}
+    </form>
+    <p>Current Status: {{ "Active" if data_collection_active else "Inactive" }}</p>
 </body>
 </html>
