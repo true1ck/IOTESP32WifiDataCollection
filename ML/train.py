@@ -9,13 +9,17 @@ import matplotlib.pyplot as plt
 import joblib
 
 # Load the dataset
-data = pd.read_csv("wifi_signal_data.csv")  # Replace with your CSV file name
+data = pd.read_csv("wf_signal.csv")  # Replace with your CSV file name
 features = data.iloc[:, 1:].values  # RSSI values (1, 2, 3, ...)
 labels = data.iloc[:, 0].values  # Location (A00, A01, ...)
 
 # Encode location labels
 label_encoder = LabelEncoder()
 encoded_labels = label_encoder.fit_transform(labels)
+
+# Save the label encoder
+joblib.dump(label_encoder, "label_encoder.pkl")
+print("Label encoder saved as 'label_encoder.pkl'")
 
 # Split the data into training and testing sets (80-20 split)
 X_train, X_test, y_train, y_test = train_test_split(features, encoded_labels, test_size=0.2, random_state=42)
@@ -24,6 +28,10 @@ X_train, X_test, y_train, y_test = train_test_split(features, encoded_labels, te
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
+
+# Save the scaler
+joblib.dump(scaler, "scaler.pkl")
+print("Scaler saved as 'scaler.pkl'")
 
 # Train the Random Forest Classifier (for evaluation)
 rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
