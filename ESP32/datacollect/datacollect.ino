@@ -2,16 +2,16 @@
 #include <HTTPClient.h>
 
 // List of specified APs you want to track
-String targetAPs[] = {"CSG518-1", "CSG518-2", "CSG518-3", "CSG518-4", 
-                      "CSG518-5", "CSG518-6", "CSG518-7", "CSG518-8"};
-int numAPs = sizeof(targetAPs) / sizeof(targetAPs[0]);
+const String targetAPs[] = {"CSG518-1", "CSG518-2", "CSG518-3", "CSG518-4", 
+                            "CSG518-5", "CSG518-6", "CSG518-7", "CSG518-8"};
+const int numAPs = sizeof(targetAPs) / sizeof(targetAPs[0]);
 
 // Your Wi-Fi network credentials
-const char* ssid = "My";           // Replace with your Wi-Fi SSID
+const char* ssid = "My";              // Replace with your Wi-Fi SSID
 const char* password = "1029384756";  // Replace with your Wi-Fi password
 
-// Server URL for the showLoc API (use the external IP of the machine running Flask)
-const char* serverURL = "http://192.168.87.54:5001/showLoc";  // Replace X with your machine's IP
+// Server URL
+const char* serverURL = "http://192.168.87.70:5000/post-rssi";  // Replace with your Flask server IP
 
 void setup() {
     Serial.begin(9600);
@@ -28,11 +28,11 @@ void setup() {
     WiFi.mode(WIFI_STA);
     delay(100);  // Small delay to ensure setup is complete
 
-    Serial.println("Starting scan...");
+    Serial.println("Setup complete. Starting real-time RSSI monitoring...");
 }
 
 void loop() {
-    // Perform a Wi-Fi scan with a 120ms timeout per channel
+    // Perform a Wi-Fi scan
     int n = WiFi.scanNetworks(false, false, false, 120);  // 120ms timeout per channel
     Serial.println("Scan complete!");
 
@@ -57,19 +57,19 @@ void loop() {
         }
     }
 
-    // Construct JSON payload with RSSI values in the desired format
-    String jsonPayload = "{\"rssi_values\": [";
+    // Construct JSON payload
+    String jsonPayload = "{";
     int foundCount = 0;
     for (int i = 0; i < numAPs; ++i) {
         if (rssiValues[i] != -999) {  // Only include found APs
             if (foundCount > 0) {
                 jsonPayload += ", ";
             }
-            jsonPayload += String(rssiValues[i]);
+            jsonPayload += "\"" + targetAPs[i] + "\": " + String(rssiValues[i]);
             foundCount++;
         }
     }
-    jsonPayload += "]}";
+    jsonPayload += "}";
 
     if (foundCount > 0) {  // Send data if any target APs are found
         sendRSSIToServer(jsonPayload);
@@ -78,11 +78,10 @@ void loop() {
     }
 
     // Delay before the next scan
-    delay(300);  // Adjust as needed for faster updates
+    delay(200);  // Adjust as needed for faster updates
 }
 
-
-void sendRSSIToServer(String jsonPayload) {
+void sendRSSIToServer(const String& jsonPayload) {
     if (WiFi.status() == WL_CONNECTED) {
         HTTPClient http;
         http.begin(serverURL);  // Specify the server URL
