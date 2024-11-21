@@ -7,11 +7,11 @@ const String targetAPs[] = {"CSG518-1", "CSG518-2", "CSG518-3", "CSG518-4",
 const int numAPs = sizeof(targetAPs) / sizeof(targetAPs[0]);
 
 // Your Wi-Fi network credentials
-const char* ssid = "My";              // Replace with your Wi-Fi SSID
+const char* ssid = "My123";              // Replace with your Wi-Fi SSID
 const char* password = "1029384756";  // Replace with your Wi-Fi password
 
 // Server URL
-const char* serverURL = "http://192.168.87.70:5000/post-rssi";  // Replace with your Flask server IP
+const char* serverURL = "http://192.168.54.12:5000/post-rssi";  // Replace with your Flask server IP
 
 void setup() {
     Serial.begin(9600);
