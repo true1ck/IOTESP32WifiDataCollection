@@ -15,16 +15,15 @@ entry_count = 0
 entry_limit = 25  # Default entries per batch
 data_collection_active = False
 current_output = "g11"
+current_direction = "N/A"  # Default direction
+csv_headers = set()  # Track header columns dynamically
 
-# Initialize CSV file with headers if it doesn't exist
+# Ensure the CSV file exists and is initialized
 if not os.path.exists(csv_file_path):
     with open(csv_file_path, 'w', newline='') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.writerow(['Network1', 'RSSI1', 'Network2', 'RSSI2', 'Network3', 'RSSI3',
-                            'Network4', 'RSSI4', 'Network5', 'RSSI5', 'Network6', 'RSSI6',
-                            'Network7', 'RSSI7', 'Network8', 'RSSI8', 'Output'])
+        pass  # Initialize an empty CSV file
 
-# HTML template for the webpage
+# Updated HTML template with dropdown for direction
 html_template = """
 <!DOCTYPE html>
 <html>
@@ -37,6 +36,17 @@ html_template = """
         <label for="output">Output Value:</label>
         <input type="text" id="output" name="output" value="{{ current_output }}">
         <button type="submit">Set Output</button>
+    </form>
+    <br>
+    <form action="/set-direction" method="POST">
+        <label for="direction">Direction:</label>
+        <select id="direction" name="direction">
+            <option value="North" {% if current_direction == 'North' %}selected{% endif %}>North</option>
+            <option value="West" {% if current_direction == 'West' %}selected{% endif %}>West</option>
+            <option value="South" {% if current_direction == 'South' %}selected{% endif %}>South</option>
+            <option value="East" {% if current_direction == 'East' %}selected{% endif %}>East</option>
+        </select>
+        <button type="submit">Set Direction</button>
     </form>
     <br>
     <form action="/set-entry-limit" method="POST">
@@ -61,6 +71,7 @@ html_template = """
 @app.route('/')
 def index():
     return render_template_string(html_template, current_output=current_output,
+                                  current_direction=current_direction,
                                   data_collection_active=data_collection_active,
                                   entry_count=entry_count, entry_limit=entry_limit)
 
@@ -69,6 +80,16 @@ def set_output():
     global current_output
     current_output = request.form.get('output', 'g11')
     return render_template_string(html_template, current_output=current_output,
+                                  current_direction=current_direction,
+                                  data_collection_active=data_collection_active,
+                                  entry_count=entry_count, entry_limit=entry_limit)
+
+@app.route('/set-direction', methods=['POST'])
+def set_direction():
+    global current_direction
+    current_direction = request.form.get('direction', 'N/A')
+    return render_template_string(html_template, current_output=current_output,
+                                  current_direction=current_direction,
                                   data_collection_active=data_collection_active,
                                   entry_count=entry_count, entry_limit=entry_limit)
 
@@ -80,6 +101,7 @@ def set_entry_limit():
         if new_limit > 0:
             entry_limit = new_limit
         return render_template_string(html_template, current_output=current_output,
+                                      current_direction=current_direction,
                                       data_collection_active=data_collection_active,
                                       entry_count=entry_count, entry_limit=entry_limit)
     except ValueError:
@@ -92,12 +114,13 @@ def toggle_collection():
     if data_collection_active:
         entry_count = 0
     return render_template_string(html_template, current_output=current_output,
+                                  current_direction=current_direction,
                                   data_collection_active=data_collection_active,
                                   entry_count=entry_count, entry_limit=entry_limit)
 
 @app.route('/post-rssi', methods=['POST'])
 def post_rssi():
-    global entry_count, data_collection_active
+    global entry_count, data_collection_active, csv_headers
 
     if not data_collection_active:
         return jsonify({"message": "Data collection is not active."}), 400
@@ -107,18 +130,30 @@ def post_rssi():
         if not isinstance(data, dict):
             raise ValueError("Invalid data format")
 
-        # Ensure data for 8 networks with default RSSI value for missing networks
-        expected_networks = [f"CSG518-{i}" for i in range(1, 9)]
-        row = []
-        default_rssi = -100  # Placeholder for missing values
-        for network in expected_networks:
-            rssi = data.get(network, default_rssi)
-            row.extend([network, rssi])
+        # Add new keys to the header set
+        csv_headers.update(data.keys())
+        csv_headers.update(["Output", "Direction"])  # Ensure "Output" and "Direction" columns are included
 
-        # Append the output value
-        row.append(current_output)
+        # Read existing CSV headers (if present)
+        with open(csv_file_path, 'r', newline='') as csvfile:
+            existing_headers = csvfile.readline().strip().split(',') if os.path.getsize(csv_file_path) > 0 else []
 
-        # Write to CSV
+        # Update CSV headers if necessary
+        if set(existing_headers) != csv_headers:
+            with open(csv_file_path, 'r', newline='') as csvfile:
+                rows = list(csv.reader(csvfile))  # Read all rows
+
+            # Rewrite file with updated headers
+            with open(csv_file_path, 'w', newline='') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                csvwriter.writerow(sorted(csv_headers))  # Write updated header
+                if rows:
+                    csvwriter.writerows(rows[1:])  # Write back previous data excluding old header
+
+        # Prepare row with values corresponding to updated headers
+        row = [data.get(header, -100) if header not in ["Output", "Direction"] else 
+               (current_output if header == "Output" else current_direction) 
+               for header in sorted(csv_headers)]
         with open(csv_file_path, 'a', newline='') as csvfile:
             csvwriter = csv.writer(csvfile)
             csvwriter.writerow(row)

@@ -1,6 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, Response
 import numpy as np
 import joblib
+import json
+from threading import Lock
 
 app = Flask(__name__)
 
@@ -28,15 +30,41 @@ except FileNotFoundError:
     print("Label encoder file not found. Ensure 'label_encoder.pkl' exists in the current directory.")
     exit()
 
-@app.route('/predict', methods=['POST'])
-def predict():
+# Global variable to store the latest predictions
+latest_predictions = None
+predictions_lock = Lock()
+
+
+def generate_grid():
+    rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    cols = [str(i).zfill(2) for i in range(11, 20)]  # 11 to 18
+    grid = [[f"{row}{col}" for col in cols] for row in rows]
+    return grid
+
+
+@app.route('/', methods=['GET'])
+def index():
     """
-    Endpoint to make predictions with the trained model.
-    Accepts JSON input with RSSI values and returns the top 3 predictions.
+    Render the grid on the web interface.
     """
+    grid = generate_grid()
+    return render_template('index.html', grid=grid)
+
+@app.route('/showLoc', methods=['POST'])
+def show_loc():
+    """
+    Handle the POST request and update the global predictions variable.
+    """
+    global latest_predictions
+
     try:
-        # Get JSON data from request
+        # Log the raw request payload for debugging
+        print("Raw Request Data:", request.data.decode('utf-8'))
+
+        # Get JSON data from the request
         data = request.json
+        print("Parsed JSON Data:", data)  # Print parsed JSON for debugging
+
         if not data or 'rssi_values' not in data:
             return jsonify({"error": "Invalid input. Provide 'rssi_values' in JSON."}), 400
 
@@ -54,13 +82,38 @@ def predict():
         top_classes = label_encoder.inverse_transform(top_indices)
         top_probabilities = probabilities[top_indices]
 
-        # Prepare the response
-        predictions = [{"location": loc, "probability": float(prob)} for loc, prob in zip(top_classes, top_probabilities)]
-        return jsonify({"predictions": predictions}), 200
+        # Update the global predictions variable
+        with predictions_lock:
+            latest_predictions = [{"location": loc, "probability": float(prob)} for loc, prob in zip(top_classes, top_probabilities)]
+
+        # Print the formatted JSON predictions in the terminal
+        print("Predictions (JSON):", json.dumps({"predictions": latest_predictions}, indent=4))
+
+        # Return the predictions as JSON
+        return jsonify({"predictions": latest_predictions}), 200
 
     except Exception as e:
+        # Log the error message in the terminal
+        print("Error occurred:", str(e))
         return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)  # Change the port to 8080 or any other available port
 
+@app.route('/stream')
+def stream():
+    """
+    Stream updates to the client using Server-Sent Events (SSE).
+    """
+    def event_stream():
+        previous_predictions = None
+        while True:
+            with predictions_lock:
+                if latest_predictions != previous_predictions:
+                    # Send new predictions only if they have changed
+                    previous_predictions = latest_predictions
+                    yield f"data: {json.dumps(latest_predictions)}\n\n"
+
+    return Response(event_stream(), content_type="text/event-stream")
+
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5001)  # Running on port 5001

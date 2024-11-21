@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Grid</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .highlight {
+            background-color: blue;
+            color: white;
+        }
+        .light-highlight {
+            background-color: lightblue;
+        }
+    </style>
+    <script>
+        // Establish a connection to the server for real-time updates
+        const eventSource = new EventSource('/stream');
+
+        eventSource.onmessage = function (event) {
+            const predictions = JSON.parse(event.data);
+
+            // Clear existing highlights
+            document.querySelectorAll('.highlight, .light-highlight').forEach(cell => {
+                cell.classList.remove('highlight', 'light-highlight');
+            });
+
+            // Highlight the grid based on predictions
+            predictions.forEach((prediction, index) => {
+                const cell = document.getElementById(prediction.location);
+                if (cell) {
+                    cell.classList.add(index === 0 ? 'highlight' : 'light-highlight');
+                }
+            });
+        };
+
+        eventSource.onerror = function () {
+            console.error("Error connecting to the server.");
+        };
+    </script>
+</head>
+<body>
+    <h1>Location Grid (A11 to I19)</h1>
+
+    <div class="grid-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in grid %}
+                <tr>
+                    {% for loc in row %}
+                    <td id="{{ loc }}">{{ loc }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
