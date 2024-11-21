@@ -1,85 +1,334 @@
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Location Grid</title>
-        <style>
-            table {
-                border-collapse: collapse;
-                width: 100%;
-                margin-top: 20px;
-            }
-            td {
-                border: 1px solid #ddd;
-                padding: 8px;
-                text-align: center;
-            }
-            th {
-                background-color: #f2f2f2;
-            }
-            .highlight {
-                background-color: blue;
-                color: white;
-            }
-            .light-highlight {
-                background-color: lightblue;
-            }
-        </style>
-        <script>
-            // Establish a connection to the server for real-time updates
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Grid</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .highlight {
+            background-color: blue;
+            color: white;
+        }
+        .light-highlight {
+            background-color: lightblue;
+        }
+        .path-highlight {
+            background-color: #90EE90;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        .current-location {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        .route-display {
+            margin-top: 20px;
+            font-size: 18px;
+            color: green;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #submit-destination {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #go-button {
+            background-color: #2196F3;
+            color: white;
+        }
+        #stop-button {
+            background-color: #f44336;
+            color: white;
+        }
+        .button-disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #destination {
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Location Grid (A11 to I19)</h1>
+
+    <!-- Grid Section -->
+    <div class="grid-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                    <th>Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in grid %}
+                <tr>
+                    {% for loc in row %}
+                    <td id="{{ loc }}">{{ loc }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Current Location Section -->
+    <div class="current-location" id="current-location">
+        Current Location: None
+    </div>
+
+    <!-- Destination Input and Route Display -->
+    <div class="controls">
+        <label for="destination">Enter Destination Point:</label>
+        <input type="text" id="destination" placeholder="e.g., B12">
+        <div class="button-group">
+            <button id="submit-destination">Set Destination</button>
+            <button id="go-button" disabled>Go</button>
+            <button id="stop-button" disabled>Stop</button>
+        </div>
+        <div class="status" id="status"></div>
+    </div>
+    <div class="route-display" id="route-display"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let currentLocation = null;
+            let activeDestination = null;
+            let isTracking = false;
+            let lastCalculatedLocation = null;
+            
             const eventSource = new EventSource('/stream');
+            const submitButton = document.getElementById('submit-destination');
+            const goButton = document.getElementById('go-button');
+            const stopButton = document.getElementById('stop-button');
+            const destinationInput = document.getElementById('destination');
+            const routeDisplay = document.getElementById('route-display');
+            const statusDisplay = document.getElementById('status');
 
-            eventSource.onmessage = function (event) {
+            function updateButtonStates() {
+                const hasDestination = activeDestination !== null;
+                const isRunning = isTracking;
+                
+                submitButton.disabled = isRunning;
+                submitButton.classList.toggle('button-disabled', isRunning);
+                
+                goButton.disabled = !hasDestination || isRunning;
+                goButton.classList.toggle('button-disabled', !hasDestination || isRunning);
+                
+                stopButton.disabled = !isRunning;
+                stopButton.classList.toggle('button-disabled', !isRunning);
+                
+                destinationInput.disabled = isRunning;
+            }
+
+            async function calculateAndDisplayRoute(destination) {
+                if (!currentLocation || !destination) {
+                    return;
+                }
+
+                // Don't recalculate if we're at the same location
+                if (lastCalculatedLocation === currentLocation) {
+                    return;
+                }
+
+                lastCalculatedLocation = currentLocation;
+
+                try {
+                    const response = await fetch('/calculate_route', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            destination: destination
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to calculate route');
+                    }
+
+                    // Clear previous path highlights
+                    document.querySelectorAll('.path-highlight').forEach(cell => {
+                        cell.classList.remove('path-highlight');
+                    });
+
+                    if (data.route && data.route.length > 0) {
+                        const route = data.route.join(" → ");
+                        routeDisplay.textContent = `Route from ${currentLocation} to ${destination}: ${route}`;
+                        
+                        // Highlight the path
+                        let tempRow = currentLocation[0].charCodeAt(0) - 'A'.charCodeAt(0);
+                        let tempCol = parseInt(currentLocation.slice(1)) - 11;
+                        
+                        data.route.forEach(direction => {
+                            switch(direction) {
+                                case 'up': tempRow--; break;
+                                case 'down': tempRow++; break;
+                                case 'left': tempCol--; break;
+                                case 'right': tempCol++; break;
+                            }
+                            const cellId = `${String.fromCharCode(65 + tempRow)}${tempCol + 11}`;
+                            const cell = document.getElementById(cellId);
+                            if (cell) {
+                                cell.classList.add('path-highlight');
+                            }
+                        });
+                    } else {
+                        if (currentLocation === destination) {
+                            routeDisplay.textContent = "Destination reached!";
+                            stopTracking();
+                        } else {
+                            routeDisplay.textContent = "No route needed - already at destination";
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error calculating route:", error);
+                    routeDisplay.textContent = `Error: ${error.message}`;
+                }
+            }
+
+            function startTracking() {
+                isTracking = true;
+                statusDisplay.textContent = "Tracking: Active";
+                statusDisplay.style.color = "#4CAF50";
+                updateButtonStates();
+            }
+
+            function stopTracking() {
+                isTracking = false;
+                statusDisplay.textContent = "Tracking: Stopped";
+                statusDisplay.style.color = "#f44336";
+                updateButtonStates();
+            }
+
+            // Handle real-time location updates
+            eventSource.onmessage = function(event) {
                 const predictions = JSON.parse(event.data);
-
+                
                 // Clear existing highlights
                 document.querySelectorAll('.highlight, .light-highlight').forEach(cell => {
                     cell.classList.remove('highlight', 'light-highlight');
                 });
 
                 // Highlight the grid based on predictions
-                predictions.forEach((prediction, index) => {
-                    const cell = document.getElementById(prediction.location);
-                    if (cell) {
-                        cell.classList.add(index === 0 ? 'highlight' : 'light-highlight');
+                if (predictions && predictions.length > 0) {
+                    predictions.forEach((prediction, index) => {
+                        const cell = document.getElementById(prediction.location);
+                        if (cell) {
+                            cell.classList.add(index === 0 ? 'highlight' : 'light-highlight');
+                        }
+                    });
+
+                    // Update current location and recalculate route if tracking is active
+                    if (predictions[0] && predictions[0].location !== currentLocation) {
+                        currentLocation = predictions[0].location;
+                        document.getElementById('current-location').textContent = 
+                            `Current Location: ${currentLocation}`;
+                        
+                        if (isTracking && activeDestination) {
+                            calculateAndDisplayRoute(activeDestination);
+                        }
                     }
-                });
+                }
             };
 
-            eventSource.onerror = function () {
+            eventSource.onerror = function() {
                 console.error("Error connecting to the server.");
+                statusDisplay.textContent = "Error: Lost connection to server";
+                statusDisplay.style.color = "#f44336";
             };
-        </script>
-    </head>
-    <body>
-        <h1>Location Grid (A11 to I19)</h1>
 
-        <div class="grid-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Location</th>
-                        <th>Location</th>
-                        <th>Location</th>
-                        <th>Location</th>
-                        <th>Location</th>
-                        <th>Location</th>
-                        <th>Location</th>
-                        <th>Location</th>
-                        <th>Location</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in grid %}
-                    <tr>
-                        {% for loc in row %}
-                        <td id="{{ loc }}">{{ loc }}</td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </body>
-    </html>
+            // Handle Set Destination button
+            submitButton.addEventListener('click', () => {
+                const destination = destinationInput.value.trim().toUpperCase();
+                
+                if (!destination) {
+                    alert("Please enter a valid destination point.");
+                    return;
+                }
+
+                if (!currentLocation) {
+                    alert("Current location is not yet available. Please wait.");
+                    return;
+                }
+
+                activeDestination = destination;
+                calculateAndDisplayRoute(destination);
+                goButton.disabled = false;
+                goButton.classList.remove('button-disabled');
+                statusDisplay.textContent = "Ready to start tracking";
+                statusDisplay.style.color = "#666";
+            });
+
+            // Handle Go button
+            goButton.addEventListener('click', () => {
+                if (activeDestination) {
+                    startTracking();
+                    calculateAndDisplayRoute(activeDestination);
+                }
+            });
+
+            // Handle Stop button
+            stopButton.addEventListener('click', () => {
+                stopTracking();
+            });
+
+            // Add keyboard support
+            destinationInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    submitButton.click();
+                }
+            });
+
+            // Initialize button states
+            updateButtonStates();
+        });
+    </script>
+</body>
+</html>

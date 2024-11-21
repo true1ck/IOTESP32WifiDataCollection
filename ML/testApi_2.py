@@ -113,6 +113,58 @@ def stream():
             time.sleep(1)  # Throttle updates to the client
 
     return Response(event_stream(), content_type="text/event-stream")
+@app.route('/calculate_route', methods=['POST'])
+def calculate_route():
+    try:
+        # Get data from the request
+        data = request.json
+        if not data or 'destination' not in data:
+            return jsonify({"error": "Invalid input. Provide 'destination' in JSON."}), 400
+
+        destination = data['destination']
+        with predictions_lock:
+            # Ensure we have a current location
+            if latest_predictions is None or len(latest_predictions) == 0:
+                return jsonify({"error": "No current location available."}), 400
+            current_location = latest_predictions[0]["location"]
+
+        # Parse the grid coordinates
+        def parse_location(location):
+            row = ord(location[0].upper()) - ord('A')  # Convert 'A' -> 0, 'B' -> 1, etc.
+            col = int(location[1:]) - 11              # Adjust column index (11 -> 0, 12 -> 1, etc.)
+            return row, col
+
+        try:
+            current_row, current_col = parse_location(current_location)
+            dest_row, dest_col = parse_location(destination)
+        except Exception as e:
+            return jsonify({"error": f"Invalid location format: {e}"}), 400
+
+        # Calculate the route
+        route = []
+        while current_row != dest_row or current_col != dest_col:
+            if current_row < dest_row:
+                route.append("down")
+                current_row += 1
+            elif current_row > dest_row:
+                route.append("up")
+                current_row -= 1
+            elif current_col < dest_col:
+                route.append("right")
+                current_col += 1
+            elif current_col > dest_col:
+                route.append("left")
+                current_col -= 1
+
+        # Print the calculated route to the terminal for debugging
+        print(f"Calculated Route: {route}")
+
+        return jsonify({"route": route}), 200
+
+    except Exception as e:
+        print("Error occurred:", str(e))
+        return jsonify({"error": str(e)}), 500
+
 
 def generate_grid():
     rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
