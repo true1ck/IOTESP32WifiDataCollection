@@ -29,24 +29,56 @@ predictions_lock = Lock()
 kf = KalmanFilter(initial_state_mean=0, n_dim_obs=1)
 kf = kf.em(np.zeros((10, 1)), n_iter=5)
 
-# Function to write data to a CSV file periodically, keeping only the last 20 entries
+# Update the log_positions_to_file function
 def log_positions_to_file():
     while True:
-        time.sleep(5)  # Every 5 seconds
+        time.sleep(1)  # Update every second for more frequent logging
 
-        # Open CSV file in write mode to overwrite the file with the latest 20 positions
         with predictions_lock:
-            with open("landmark_details.csv", mode='w', newline='') as file:
-                writer = csv.DictWriter(file, fieldnames=["timestamp", "location", "probability"])
+            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Read existing entries (if file exists)
+            existing_entries = []
+            try:
+                with open("landmark_details.csv", mode='r', newline='') as file:
+                    reader = csv.DictReader(file)
+                    existing_entries = list(reader)
+            except FileNotFoundError:
+                pass
 
-                # Write the header if file is empty (only the first time)
-                if file.tell() == 0:
+            # Add new entry if we have a prediction
+            if latest_predictions and len(latest_predictions) > 0:
+                new_entry = {
+                    "timestamp": current_time,
+                    "location": latest_predictions[0]["location"],
+                    "probability": f"{latest_predictions[0]['probability']:.2f}",
+                    "secondary_locations": ", ".join(f"{pred['location']} ({pred['probability']:.2f}%)" 
+                                                   for pred in latest_predictions[1:3])
+                }
+                
+                # Add new entry at the beginning
+                existing_entries.insert(0, new_entry)
+                
+                # Keep only the latest 20 entries
+                existing_entries = existing_entries[:20]
+
+                # Write updated entries back to file
+                with open("landmark_details.csv", mode='w', newline='') as file:
+                    fieldnames = ["timestamp", "location", "probability", "secondary_locations"]
+                    writer = csv.DictWriter(file, fieldnames=fieldnames)
                     writer.writeheader()
+                    writer.writerows(existing_entries)
 
-                # Write the last 20 entries to the file
-                for position in position_history:
-                    if position:  # Avoid writing None values
-                        writer.writerow(position)
+# Add new route to get latest entries
+@app.route('/get_latest_entries')
+def get_latest_entries():
+    try:
+        with open("landmark_details.csv", mode='r', newline='') as file:
+            reader = csv.DictReader(file)
+            entries = list(reader)[:10]  # Get top 10 entries
+            return jsonify({"entries": entries})
+    except FileNotFoundError:
+        return jsonify({"entries": []})
 
 # Start the logging thread
 threading.Thread(target=log_positions_to_file, daemon=True).start()

@@ -82,6 +82,55 @@
             font-weight: bold;
             color: #666;
         }
+        .history-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .history-table th,
+        .history-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .history-table th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: 500;
+        }
+        
+        .history-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .history-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        
+        .refresh-button {
+            background-color: #607d8b;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .refresh-button:hover {
+            background-color: #546e7a;
+        }
     </style>
 </head>
 <body>
@@ -132,7 +181,23 @@
         <div class="status" id="status"></div>
     </div>
     <div class="route-display" id="route-display"></div>
-
+    <div class="history-section">
+        <h2>Location History</h2>
+        <button id="refresh-history" class="refresh-button">Refresh History</button>
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Primary Location</th>
+                    <th>Confidence</th>
+                    <th>Alternative Locations</th>
+                </tr>
+            </thead>
+            <tbody id="history-tbody">
+                <!-- Will be populated dynamically -->
+            </tbody>
+        </table>
+    </div>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             let currentLocation = null;
@@ -276,8 +341,30 @@
                         }
                     }
                 }
+                
             };
-
+            async function updateHistory() {
+                try {
+                    const response = await fetch('/get_latest_entries');
+                    const data = await response.json();
+                    
+                    const tbody = document.getElementById('history-tbody');
+                    tbody.innerHTML = ''; // Clear existing entries
+                    
+                    data.entries.forEach(entry => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${entry.timestamp}</td>
+                            <td>${entry.location}</td>
+                            <td>${entry.probability}%</td>
+                            <td>${entry.secondary_locations}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                } catch (error) {
+                    console.error("Error fetching history:", error);
+                }
+            }
             eventSource.onerror = function() {
                 console.error("Error connecting to the server.");
                 statusDisplay.textContent = "Error: Lost connection to server";
@@ -325,7 +412,11 @@
                     submitButton.click();
                 }
             });
+            updateHistory();
+            setInterval(updateHistory, 2000); // Update every 2 seconds
 
+            // Add refresh button handler
+            document.getElementById('refresh-history').addEventListener('click', updateHistory);
             // Initialize button states
             updateButtonStates();
         });

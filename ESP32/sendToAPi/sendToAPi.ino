@@ -7,7 +7,7 @@ String targetAPs[] = {"CSG518-1", "CSG518-2", "CSG518-3", "CSG518-4",
 int numAPs = sizeof(targetAPs) / sizeof(targetAPs[0]);
 
 // Your Wi-Fi network credentials
-const char* ssid = "My";           // Replace with your Wi-Fi SSID
+const char* ssid = "My123";           // Replace with your Wi-Fi SSID
 const char* password = "1029384756";  // Replace with your Wi-Fi password
 
 // Server URL for the showLoc API (use the external IP of the machine running Flask)
